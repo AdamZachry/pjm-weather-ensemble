@@ -1,0 +1,14 @@
+# Data files — large and reproducible from fetch scripts
+data/raw/
+data/processed/
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
