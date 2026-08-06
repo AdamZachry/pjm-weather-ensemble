@@ -110,6 +110,59 @@ def plot_oos_comparison(ols_wf, gbm_wf):
     plt.savefig(f'{FIGDIR}/fig5_oos_comparison.png', dpi=200)
     plt.close()
 
+def plot_qlike_by_year(per_year):
+    """Figure 6: QLIKE loss by year, HAR-RV vs HAR-X. Lower is better."""
+    fig, ax = plt.subplots(figsize=(8, 5))
+    x = np.arange(len(per_year))
+    w = 0.38
+    ax.bar(x - w/2, per_year['qlike_har'], w,
+           label='HAR-RV', color='#d6604d', alpha=0.85)
+    ax.bar(x + w/2, per_year['qlike_harx'], w,
+           label='HAR-X (with weather)', color='#2166ac', alpha=0.85)
+    ax.set_xticks(x)
+    ax.set_xticklabels(per_year.index.astype(str))
+    ax.set_ylabel('Mean QLIKE loss (lower is better)')
+    ax.set_xlabel('Test year')
+    ax.set_title('Volatility forecast accuracy vs the HAR-RV benchmark')
+    ax.legend()
+    plt.tight_layout()
+    plt.savefig(f'{FIGDIR}/fig6_qlike_by_year.png', dpi=200)
+    plt.close()
+
+
+def plot_forecast_vs_realized(res):
+    """Figure 7: HAR-X forecast against realized volatility."""
+    fig, ax = plt.subplots(figsize=(13, 5))
+    d = pd.to_datetime(res['dates'])
+    ax.plot(d, res['actual'], label='Realized', alpha=0.55, linewidth=0.8)
+    ax.plot(d, res['pred_harx'], label='HAR-X forecast',
+            alpha=0.9, linewidth=1.0)
+    ax.set_ylabel('Realized volatility ($/MWh)')
+    ax.set_title('Out-of-sample volatility forecast vs realized')
+    ax.legend()
+    plt.tight_layout()
+    plt.savefig(f'{FIGDIR}/fig7_forecast_vs_realized.png', dpi=200)
+    plt.close()
+
+
+def plot_sizing_equity(base, sized_har, sized_x, dates):
+    """Figure 8: cumulative P&L under each sizing rule."""
+    fig, ax = plt.subplots(figsize=(12, 5))
+    d = pd.to_datetime(dates)
+    ax.plot(d, base.cumsum(), label='Constant size',
+            color='#999999', linewidth=1.2)
+    ax.plot(d, sized_har.cumsum(), label='Vol-scaled (HAR-RV)',
+            color='#d6604d', linewidth=1.2)
+    ax.plot(d, sized_x.cumsum(), label='Vol-scaled (HAR-X)',
+            color='#2166ac', linewidth=1.5)
+    ax.axhline(0, color='black', linewidth=0.8)
+    ax.set_ylabel('Cumulative P&L ($/MWh, normalized size)')
+    ax.set_title('Position sizing on the volatility forecast')
+    ax.legend()
+    plt.tight_layout()
+    plt.savefig(f'{FIGDIR}/fig8_sizing_equity.png', dpi=200)
+    plt.close()
+
 if __name__ == "__main__":
     sys.path.append(os.path.dirname(os.path.dirname(__file__)))
     from models.ols_model import (run_final_models, run_regime_split,
@@ -139,5 +192,14 @@ if __name__ == "__main__":
     from models.ml_models import run_gradient_boosting
     gbm_wf, _, _ = run_gradient_boosting(df)
     plot_oos_comparison(wf, gbm_wf)
+
+    print("Figs 6-8: HAR benchmark and economic value...")
+    from models.har_benchmark import compare_har_models
+    from models.economic_value import run_sizing_comparison
+    res = compare_har_models(df)
+    plot_qlike_by_year(res['per_year'])
+    plot_forecast_vs_realized(res)
+    table, base, s_har, s_x, sz_dates = run_sizing_comparison(df)
+    plot_sizing_equity(base, s_har, s_x, sz_dates)
 
     print("All figures saved to results/figures/")

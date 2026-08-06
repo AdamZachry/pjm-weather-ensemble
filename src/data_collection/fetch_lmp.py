@@ -12,15 +12,17 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 import config
 
-def fetch_lmp_year(year):
+def fetch_lmp_year(year, market='rt'):
     """
-    Returns Local Date, Hour Number and PJM Total LMP for specified year, with columns renamed to date, hour, lmp respectively
-    year : int, 2020<=year<=2025
+    Fetch one year of PJM hourly LMPs from EIA.
+    market: 'rt' for real-time, 'da' for day-ahead.
     """
-    year_csv = pd.read_csv(f"https://www.eia.gov/electricity/wholesalemarkets/csv/pjm_lmp_rt_hr_zones_{year}.csv", skiprows=3)
-    year_csv = year_csv[['Local Date', 'Hour Number', 'PJM Total LMP']]
-    year_csv.columns = ['date', 'hour', 'lmp']
-    return year_csv
+    url = (f"https://www.eia.gov/electricity/wholesalemarkets/csv/"
+           f"pjm_lmp_{market}_hr_zones_{year}.csv")
+    df = pd.read_csv(url, skiprows=3)
+    df = df[['Local Date', 'Hour Number', 'PJM Total LMP']]
+    df.columns = ['date', 'hour', 'lmp']
+    return df
 
 def daily_metrics(group):
     """
@@ -71,5 +73,46 @@ def build_lmp_dataset(start_year, end_year):
     print(f"Saved {len(df)} rows")
     return df
 
+def build_da_features(start_year, end_year):
+    """
+    Day-ahead features.
+
+    da_dispersion: std dev of the 24 day-ahead hourly prices. This is the
+    market's own forward-looking view of tomorrow's price variation, priced
+    the day before -- an imperfect but usable implied-volatility proxy.
+    It measures expected SHAPE (peak vs off-peak) as well as uncertainty,
+    so it is a lower bound on what the market knew. State this limitation.
+
+    dart_premium: mean(RT) - mean(DA). Per-MWh P&L of holding a one-day
+    day-ahead-to-real-time position. Used as the P&L series for the
+    position-sizing exercise.
+    """
+    rows = []
+    for year in range(start_year, end_year + 1):
+        print(f"Fetching {year} (DA + RT)...")
+        da = fetch_lmp_year(year, market='da')
+        rt = fetch_lmp_year(year, market='rt')
+
+        da_daily = da.groupby('date')['lmp'].agg(['mean', 'std', 'count'])
+        da_daily.columns = ['da_price', 'da_dispersion', 'da_hours']
+
+        rt_daily = rt.groupby('date')['lmp'].agg(['mean', 'count'])
+        rt_daily.columns = ['rt_price', 'rt_hours']
+
+        rows.append(da_daily.join(rt_daily).reset_index())
+
+    df = pd.concat(rows, ignore_index=True)
+    df['date'] = pd.to_datetime(df['date'])
+    df = df[(df['da_hours'] == 24) & (df['rt_hours'] == 24)]
+    df['dart_premium'] = df['rt_price'] - df['da_price']
+    df = df[['date', 'da_price', 'da_dispersion', 'dart_premium']]
+    df = df.sort_values('date').reset_index(drop=True)
+
+    df.to_csv('data/processed/da_features.csv', index=False)
+    print(f"Saved {len(df)} rows")
+    print(df[['da_dispersion', 'dart_premium']].describe())
+    return df
+
 if __name__ == "__main__":
     build_lmp_dataset(2020, 2025)
+    build_da_features(2020, 2025)

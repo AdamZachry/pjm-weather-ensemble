@@ -49,6 +49,26 @@ def run_regime_split(df):
         'n_mild': len(mild),
     }
 
+def run_efficiency_test(df):
+    """
+    Does the weather signal contain volatility information beyond what
+    the day-ahead curve already implies?
+
+    log_da_dispersion is the market's forward-looking view, priced before
+    the fact. If spread_x_hdd stays significant after controlling for it,
+    the market underprices weather uncertainty on cold days.
+
+    Caveat to state explicitly: DA dispersion reflects expected peak/
+    off-peak SHAPE as well as uncertainty, so it is an imperfect
+    implied-vol proxy and a lower bound on market information.
+    """
+    base = CONTROLS + ['log_da_dispersion']
+    return {
+        'implied_only': run_hac_ols(df, base),
+        'implied_plus_signal': run_hac_ols(
+            df, base + ['spread_24', 'spread_x_hdd']),
+    }
+
 
 def walk_forward(df, features, coef_of_interest, target=TARGET,
                  min_train_years=2, min_test_obs=30):
@@ -109,6 +129,15 @@ if __name__ == "__main__":
               f"spread_24={m.params['spread_24']:.4f}  "
               f"p={m.pvalues['spread_24']:.4f}  "
               f"CI=[{ci[0]:.4f}, {ci[1]:.4f}]")
+        
+    print("\n" + "=" * 60)
+    print("EFFICIENCY TEST: signal vs day-ahead implied dispersion")
+    print("=" * 60)
+    eff = run_efficiency_test(df)
+    for name, m in eff.items():
+        print(f"{name:<22} R2={m.rsquared:.4f}")
+    print()
+    print(eff['implied_plus_signal'].summary().tables[1])
 
     print("\n" + "=" * 60)
     print("WALK-FORWARD: spread_x_hdd")

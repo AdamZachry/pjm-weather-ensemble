@@ -15,16 +15,14 @@ import config
 def load_and_merge():
     spread = pd.read_csv('data/processed/ensemble_spread.csv')
     lmp = pd.read_csv('data/processed/lmp_daily.csv')
+    da = pd.read_csv('data/processed/da_features.csv')
 
-    spread['date'] = pd.to_datetime(spread['date'])
-    lmp['date'] = pd.to_datetime(lmp['date'])
+    for d in (spread, lmp, da):
+        d['date'] = pd.to_datetime(d['date'])
 
-    # Inner join on date. No shifting needed: spread features for date T
-    # were computed from forecasts initialized BEFORE T (T-1 for fxx=24,
-    # T-7 for fxx=168), so there is no lookahead bias by construction.
     df = pd.merge(spread, lmp, on='date', how='inner')
-    df = df.sort_values('date').reset_index(drop=True)
-    return df
+    df = pd.merge(df, da, on='date', how='inner')
+    return df.sort_values('date').reset_index(drop=True)
 
 
 def add_controls(df):
@@ -70,6 +68,15 @@ def add_derived_features(df):
     df['spread_dm'] = df['spread_24'] - df['spread_24'].mean()
     df['HDD_dm'] = df['HDD'] - df['HDD'].mean()
     df['spread_x_hdd'] = df['spread_dm'] * df['HDD_dm']
+
+    # HAR-RV components (Corsi 2009): daily, weekly, monthly lags of
+    # realized volatility. The standard benchmark for realized vol.
+    df['rv_d'] = df['log_vol'].shift(1)
+    df['rv_w'] = df['log_vol'].shift(1).rolling(5).mean()
+    df['rv_m'] = df['log_vol'].shift(1).rolling(22).mean()
+
+    # log day-ahead dispersion -- implied-vol proxy, same scale as target
+    df['log_da_dispersion'] = np.log(df['da_dispersion'])
 
     return df
 
