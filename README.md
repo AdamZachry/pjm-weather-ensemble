@@ -163,7 +163,7 @@ Final sample after merging, dropping DST days, and the 22-day HAR lag: about 1,5
 
 ## Method notes
 
-Choices that mattered more than I expected.
+A personal note of things that i found kinda important
 
 **Log the target.** Raw realized volatility has skew of 13.8 and kurtosis of 331, with a max of $1,100/MWh against a median of $13. OLS minimizes squared errors, so a handful of extreme days were running the entire regression and coefficients on correlated features flipped signs at random. Logging fixed it (skew drops to 0.41) and roughly doubled the baseline R².
 
@@ -171,7 +171,7 @@ Choices that mattered more than I expected.
 
 **Newey-West standard errors throughout.** Volatility is autocorrelated, which violates the OLS independence assumption and makes naive standard errors too small.
 
-**Sine and cosine seasonality, not dummies.** December 31 and January 1 should be nearly identical, and a winter dummy creates an artificial discontinuity at the year boundary.
+**Sine and cosine seasonality.** December 31 and January 1 should be nearly identical, and a winter dummy creates an artificial discontinuity at the year boundary.
 
 **One spread feature instead of seven.** My first attempt put all seven lead times in one regression. Every coefficient came back insignificant with signs scattered across +5.4, +0.9, −10.2, −29.4, +26.5, and the condition number was 24,600, while the F-test was strongly significant. That is what correlated features fighting over the same variance looks like. I use `spread_24` as the single representative measure.
 
