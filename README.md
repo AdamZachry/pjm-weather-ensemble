@@ -2,9 +2,9 @@
 
 Weather forecasts come with a built-in measure of their own uncertainty. NOAA's GEFS model runs 31 simulations of the atmosphere at once, each starting from a slightly different initial state. When all 31 agree tomorrow will be 40°F, the forecast is confident. When they range from 28°F to 45°F, the atmosphere is hard to predict. That disagreement is called ensemble spread, and it is free and public.
 
-Electricity demand is mostly weather driven. Power cannot be stored at scale, so supply has to match demand in real time, and the supply stack is lumpy: as demand climbs you move from cheap baseload to expensive peakers in discrete jumps. My hypothesis is then, uncertain weather should therefore mean uncertain demand, which should mean uncertain prices (volatility).
+Electricity demand is mostly weather driven. Power cannot be stored at scale, so supply has to match demand in real time, and the supply stack is lumpy: as demand climbs you move from cheap baseload to expensive peakers in discrete jumps. My hypothesis is that uncertain weather should mean uncertain demand, which should mean uncertain prices (volatility).
 
-This project tests that chain on PJM real-time prices from 2020 to 2025, then asks the question of whether this signal is profitable. 
+This project tests that chain on PJM real-time prices from 2020 to 2025, then asks whether the signal is profitable.
 
 ## Summary of findings
 
@@ -15,6 +15,7 @@ Four results, in the order I found them:
 3. The signal contains no information beyond what day-ahead prices already imply. Controlling for day-ahead price dispersion, the interaction term goes from p < 0.001 to p = 0.20. Thus, PJM prices weather uncertainty efficiently.
 4. It still has economic value. Using the forecast to size a short-premium position raises the Sharpe ratio from 0.16 to 0.39 and cuts maximum drawdown by 35%.
 
+![Cold vs mild regime comparison](results/figures/fig1_regime_comparison.png)
 
 ## 1. The signal is conditional on cold weather
 
@@ -54,20 +55,20 @@ Retraining on everything before each test year:
 
 Positive in every window, mean 0.081. The coefficient drifts down over time and 2025 is weak, though 2025 is a partial year since price data ends June 22. Could be market adaptation. Could be noise. Four years is not enough to tell.
 
-### The effect is stronger in the tail
+### The pattern strengthens toward the tail, though only the median survives bootstrap
 
-Quantile regression on log volatility, with bootstrapped confidence intervals since `quantreg` reports IID standard errors:
+Quantile regression on log volatility. `quantreg` reports IID standard errors, which are optimistic here, so I bootstrapped 500 resamples.
 
 | Quantile | Coefficient | p | Bootstrap CI | Survives? |
 |---|---|---|---|---|
-| 0.10 | 0.230 | 0.159 | | |
-| 0.25 | 0.149 | 0.226 | | |
-| 0.50 | 0.344 | 0.003 | [0.08, 0.57] | yes |
-| 0.75 | 0.210 | 0.106 | [−0.03, 0.48] | no |
-| 0.90 | 0.401 | 0.016 | [0.02, 0.70] | yes |
-| 0.95 | 0.511 | 0.024 | [−0.13, 0.94] | **no** |
+| 0.10 | 0.225 | 0.184 | | |
+| 0.25 | 0.152 | 0.212 | | |
+| 0.50 | 0.331 | 0.005 | [0.05, 0.58] | yes |
+| 0.75 | 0.200 | 0.131 | | |
+| 0.90 | 0.381 | 0.022 | [−0.03, 0.72] | **no** |
+| 0.95 | 0.471 | 0.050 | | |
 
-Nothing on calm days, which fits the mechanism. Uncertainty only matters once the supply stack is steep. The 95th percentile has the largest point estimate in the table and I am not claiming it. Only about 80 observations sit above that threshold and the bootstrap interval covers zero.
+Point estimates climb from 0.15 at the 25th percentile to 0.47 at the 95th, and nothing shows up on calm days, which fits the mechanism. Uncertainty only matters once the supply stack is steep. But under bootstrap only the median holds. The 90th percentile interval covers zero by a hair and the 95th has roughly 80 observations behind it. The tail pattern is real enough to describe and not strong enough to claim.
 
 ## 2. Forecasting: HAR-RV benchmark
 
@@ -114,7 +115,7 @@ It does not.
 
 The interaction falls from p < 0.001 to p = 0.20 once day-ahead dispersion is in the model. Incremental R² is 0.0024. Day-ahead dispersion on its own explains 51.9% of next-day volatility, well above the 36.3% from the full weather model.
 
-PJM prices weather uncertainty efficiently. There is no residual edge in a free public forecast product, which in hindsight is the expected result. Day-ahead prices embed load forecasts, unit commitment, outage schedules, and fuel costs, of which GEFS spread is one public input among many. This would make sense as every desk in that market has meteorologists.
+PJM prices weather uncertainty efficiently. There is no residual edge in a free public forecast product, which in hindsight is the expected result. Day-ahead prices embed load forecasts, unit commitment, outage schedules, and fuel costs, of which GEFS spread is one public input among many. Every desk in that market runs meteorologists.
 
 Worth stating though, day-ahead dispersion reflects expected peak versus off-peak shape as well as pure uncertainty, so it is an imperfect implied-volatility proxy and a lower bound on what the market knew.
 
@@ -132,7 +133,9 @@ Constant size against size scaled by 1/predicted volatility, normalized so avera
 | Vol-scaled, HAR-RV | 776 | 0.339 | −1190 |
 | Vol-scaled, HAR-X (weather) | **875** | **0.390** | **−1021** |
 
-Sizing on a volatility forecast more than doubles the Sharpe ratio and cuts maximum drawdown by 24%. Adding the weather signal on top of HAR improves all three metrics again: 13% more P&L, Sharpe from 0.339 to 0.390, drawdown from −1190 to −1021.
+![Sizing equity curves](results/figures/fig8_sizing_equity.png)
+
+Sizing on a volatility forecast more than doubles the Sharpe ratio. Against constant size, the HAR-RV rule cuts maximum drawdown 24% and the weather-informed HAR-X rule cuts it 35%. Adding the weather signal on top of HAR improves all three metrics: 13% more P&L, Sharpe from 0.339 to 0.390, drawdown from −1190 to −1021.
 
 Three things this does not account for. Transaction costs are excluded entirely, and adding them would reduce all three Sharpe ratios by an amount I have not measured. A Sharpe of 0.39 is modest in absolute terms, so the relative improvement is the finding rather than the level. And the strategy has negative skew by construction, so those drawdown numbers are real risk.
 
@@ -142,7 +145,7 @@ Included because they are part of the result.
 
 **Spike prediction.** Logistic regression on whether any hour exceeded $200/MWh. Adding ensemble spread to the controls gives a likelihood ratio statistic of 0.67 (p = 0.41). No improvement. This fits the story since extreme PJM spikes are scarcity events driven by forced outages and reserve shortfalls, which atmospheric uncertainty cannot anticipate. Weather uncertainty predicts how much prices move and says nothing about whether a discrete scarcity event fires.
 
-**Gradient boosting.** I wanted to know whether a model free to find any nonlinear structure would discover the cold-weather regime on its own. Using LightGBM, same features, same walk-forward splits, heavy regularization at depth 3 with 50 minimum samples per leaf and early stopping. Out-of-sample R² was negative in all four test years, worse than predicting the test-year mean. In 2024 early stopping halted at iteration 16. Around 1,600 noisy daily observations is not enough for trees to find stable structure, and the hand-built specification encodes domain knowledge the algorithm cannot recover at this sample size. I left SHAP plots out because feature attributions from a model that does not generalize do not tell you anything.
+**Gradient boosting.** The point was to see whether a model that can find arbitrary nonlinear structure would pick up the cold-weather regime by itself. LightGBM, identical features, identical walk-forward splits, regularized hard at depth 3 with a 50-sample leaf minimum and early stopping. It lost. Out-of-sample R² came back negative every year (−0.179, −0.020, −0.040, −0.148), meaning it did worse than guessing the test-year mean. In 2024 early stopping quit at iteration 18. Roughly 1,600 noisy daily observations is too thin for trees, and the log transform, degree days, and interaction term are doing work the algorithm has no way to reconstruct from the data alone.
 
 **Forecast trajectory features.** For each target date I built the full path of how the temperature forecast evolved across seven lead times: total path length, trajectory volatility, near-term against far-term revision. They had the strongest raw correlations with volatility of anything in the project (path length 0.13, against 0.075 for spread). All of it went insignificant once controls were in. The raw correlation was seasonality wearing a disguise.
 
@@ -224,6 +227,22 @@ The sizing exercise excludes transaction costs, and I have not measured how much
 Day-ahead dispersion is an imperfect implied-volatility proxy. A true efficiency test would use options-implied volatility, which trades OTC and is not publicly available.
 
 Four years of walk-forward is a small number of independent test periods, and the final year is partial.
+
+## Future work
+
+Ordered by what I would actually do first.
+
+**Decompose into a heat rate.** Long power against short gas at a heat rate, because the fuel leg is the dominant hedgeable risk. Since log P_power = log P_gas + log IHR, daily realized variance splits into a gas component, an implied heat rate component, and a covariance term. Running the existing cold-regime specification against all three targets tests something the current version cannot, whether the signal works through PJM's own supply stack or through the national gas balance. Henry Hub daily spot is free from EIA and the whole test is a target swap on code that already exists.
+
+**Test whether the mechanism is gas deliverability rather than load.** My current explanation for the cold-weather result is heating degree days. The more likely mechanism could be fuel. In Northeast cold snaps, pipeline capacity binds, regional basis blows out, and gas-fired units without firm transport cannot get supply, so power decouples from Henry Hub for a physical reason. PJM's own planning documents cite nomination timing misalignment and insufficient firm transport contracts as persistent winter risks. The test is to replace spread × HDD with spread × basis, where basis is the regional hub minus Henry Hub, then run both together and see which survives. EIA republishes ICE data for PJM West and its paired gas hub at daily frequency going back to 2014, so this is achievable without paid indices. One caveat I would build in from the start: roughly 40% of PJM's gas fleet can switch to oil, which caps the effect relative to what the ISO New England literature would predict.
+
+**Hedge the fuel leg in the sizing exercise.** The current position is a virtual power trade with no gas hedge, which is not what anyone actually holds. Adding the gas leg at a 7.0 MMBtu/MWh heat rate and reporting Sharpe with and without it would show whether removing uncompensated fuel risk improves risk-adjusted return. That is a variance reduction rather than a search for return, so it improves the result without the overfitting risk that comes from tuning.
+
+**Measure transaction costs properly.** I flagged their absence and then did nothing about it. Bid-ask plus PJM fees on virtual positions is a real number I could look up, and running the sizing comparison across three cost levels would show where the improvement breaks even.
+
+**Go locational.** The system-wide aggregate smooths out congestion, and congestion is where most tradeable volatility in PJM lives. Running the signal at five or six representative nodes, a load zone, a generation pocket, and a known constrained interface, would also open portfolio construction on whether the node-level signals are correlated and whether diversifying across them improves the aggregate Sharpe.
+
+**Combine with uncorrelated signals.** A Sharpe of 0.39 is unremarkable standalone. However, portfolio Sharpe scales roughly with the square root of the number of weakly correlated signals, and a forecast driven by atmospheric physics should correlate with very little else. The interesting question then, is not how to make this signal stronger, but what to pair it with.
 
 ---
 
