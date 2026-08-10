@@ -2,7 +2,7 @@
 
 Weather forecasts come with a built-in measure of their own uncertainty. NOAA's GEFS model runs 31 simulations of the atmosphere at once, each starting from a slightly different initial state. When all 31 agree tomorrow will be 40°F, the forecast is confident. When they range from 28°F to 45°F, the atmosphere is hard to predict. That disagreement is called ensemble spread, and luckily for me it is free.
 
-Electricity demand is mostly weather driven. Power cannot be stored at scale, so supply has to match demand in real time, and the supply stack is lumpy: as demand climbs you move from cheap baseload to expensive peakers in discrete jumps. My hypothesis is that uncertain weather should mean uncertain demand, which should mean uncertain prices (volatility).
+Electricity demand is mostly weather driven. Power cannot be stored at scale, so supply has to match demand in real time. As demand climbs you move from cheap baseload to expensive peaks in discrete jumps. My hypothesis is that uncertain weather should mean uncertain demand, which in turn creates uncertain prices (volatility!).
 
 This project tests that chain on PJM real-time prices from 2020 to 2025, then asks whether the signal is profitable.
 
